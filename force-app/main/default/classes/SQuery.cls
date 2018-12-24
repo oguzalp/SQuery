@@ -173,6 +173,17 @@ public virtual class SQuery implements IQueryable{
         this.additionalWhereClause = additionalWhereStatement;
         return this;
     }
+
+    public SQuery getRecordById(String recordId){
+        this.addCondition( new Field('Id').equals( recordId ));
+        return this;        
+    }
+
+    public SQuery getRecordsByIds(List<String> idSet){
+        this.addCondition( new Field('Id').isIN(idSet) );
+        return this;
+    }
+
     
     public String getQualifiedParentName(String fieldName){
         String temp = fieldName;  
@@ -271,9 +282,8 @@ public virtual class SQuery implements IQueryable{
     }
 
     public List<SObject> runQuery(){
-
         try{
-            return new List<SObject>( Database.query(this.toSoql()) );
+            return new List<SObject>( Database.query(this.toSoql() ));
             
         } catch(Exception ex) {
             throw new SQueryException(ex.getMessage());
@@ -305,7 +315,7 @@ public virtual class SQuery implements IQueryable{
         }
     }
 
-        public static String addNameSpace(String obj){
+    public static String addNameSpace(String obj){
         if(String.isEmpty(namespace)){
             return obj;
         }
@@ -481,10 +491,6 @@ public virtual class SQuery implements IQueryable{
         }
     }
 
-
-    /* private boolean checkFieldHasNamespace(String fieldName){
-         return Pattern.matches('(^*__?)',fieldName);
-     }*/
 
     public class SQueryException extends Exception { }
 }
