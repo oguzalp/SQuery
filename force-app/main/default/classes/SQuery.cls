@@ -158,6 +158,17 @@ public virtual class SQuery implements IQueryable{
         return this;  
     }
 
+    /**
+     *  Comma delimited field set
+     */
+    public SQuery addParentFields(String parentFields){
+        if(String.isNotBlank(parentFields) && parentFields.contains(',')){
+            List<String> fieldList = parentFields.split(',');
+            this.addParentFields(fieldList);
+        }
+        return this;
+    }
+
     public SQuery addParentField(String parentFieldName){
         String qualifiedName = getQualifiedParentName(parentFieldName);
         System.debug('qualifiedParentName===>'+qualifiedName);

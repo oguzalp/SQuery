@@ -1,7 +1,6 @@
 public class Field extends Condition {
 	
-    public String field {get;private set;}
-    
+    public String field {get;private set;} 
     protected Operator operant {get;private set;}
 
     public Object value {get;private set;}
@@ -176,7 +175,7 @@ public class Field extends Condition {
             val instanceof Set<Object>){
             List<String> vals = new List<String>();
             for (Object v : (List<Object>)val) {
-               if(v instanceof String){
+               if(v instanceof String || v instanceof Id){
                     vals.add( '\'' + String.escapeSingleQuotes( String.valueOf(v) ) + '\'');
                }else{
                    vals.add((String)v);
@@ -188,8 +187,12 @@ public class Field extends Condition {
 
             returnValue += ((DateLiteral)val).name();
 
-        }else{
-            throw new SQuery.SQueryException('Object value types must be null|primitive types or array of primitive types');
+        }else if(val instanceOf SQuery){
+            SQuery sq =(SQuery)val;
+            returnValue += sq.toSoql();
+        }
+        else{
+            throw new SQuery.SQueryException('Object value types must be null|primitive|SQuery types or array of primitive types');
         }
         
         return returnValue;
