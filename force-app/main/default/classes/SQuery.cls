@@ -285,9 +285,11 @@ public virtual class SQuery implements IQueryable{
     }
 
     public List<SObject> runQuery(){
+        if(this.enforceFLS && !this.sobjectResult.isAccessible()){
+            throw new SObjectException('User has not permission to access that '+ this.sobjectResult.getName() + ' object');
+        }
         try{
-            return new List<SObject>( Database.query(this.toSoql() ));
-            
+           return new List<SObject>( Database.query(this.toSoqL()) );
         } catch(Exception ex) {
             throw new SQueryException(ex.getMessage());
         }  
