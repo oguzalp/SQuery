@@ -19,7 +19,7 @@ public class SQueryTest
             .addParentField('Account.AccountSource')
             .toSoql();
 
-        System.assertEquals('SELECT Id,FirstName,LastName,Account.Name,Account.AccountSource FROM Contact');
+        System.assertEquals('SELECT Id,FirstName,LastName,Account.Name,Account.AccountSource FROM Contact',test_query);
     }
 
     @isTest

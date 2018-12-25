@@ -2,13 +2,14 @@
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
     <types>
         <members>SQuery</members>
+        <members>IQueryable</members>
         <members>SQueryTest</members>
         <members>Condition</members>
         <members>Field</members>
         <members>DateLiteral</members>
-        <members>Operator</members>
         <members>AndCondition</members>
         <members>OrCondition</members>
+        <members>SortDirection</members>
         <name>ApexClass</name>
     </types>
     <version>44.0</version>

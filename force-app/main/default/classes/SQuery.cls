@@ -34,6 +34,7 @@ public virtual class SQuery implements IQueryable{
     private Integer offSetValue;
     //private String orderState;
     private Condition whereState;
+    private List<Condition> conditions; 
     private String additionalWhereClause;
     private String queryState;
     private String soql;
@@ -53,6 +54,7 @@ public virtual class SQuery implements IQueryable{
         this.fields = new Set<String>();
         this.parentFields = new Set<String>();
         this.subQueries = new List<SQuery>();
+        this.conditions = new List<Condition>();
         //this.childRelationShips = new Map<String,Schema.SObjectType>();
         this.orderBys = new List<OrderBy>();
         this.enforceFLS = false;
@@ -165,7 +167,8 @@ public virtual class SQuery implements IQueryable{
 
     
     public Squery addCondition(Condition c){
-        this.whereState = c;
+        //this.whereState = c;
+        this.conditions.add(c);
         return this;
     }
 
@@ -380,8 +383,18 @@ public virtual class SQuery implements IQueryable{
            
         soql = String.format(formatString,args);
 
-        if(this.whereState != null){
+        /*if(this.whereState != null){
             soql += ' WHERE ' + whereState.toSoql();     
+        }*/
+
+        if(!this.conditions.isEmpty()){
+            soql += ' WHERE ';
+            List<String> whereConditions = new List<String>();
+            for(Condition c: this.conditions){
+                whereConditions.add(c.toSoql());
+            }
+            soql += String.join(whereConditions, ' AND ');
+            //System.debug('WHERE CONDITIONS====>'+soql);
         }
 
         if(this.whereState != null && this.additionalWhereClause!=null){
@@ -456,13 +469,6 @@ public virtual class SQuery implements IQueryable{
         }else{
             return fieldRel;
         }
-    }
-
-    public enum SortDirection{
-        ASCENT,
-        DESCENT,
-        ASC_NULL_LAST,
-        DESC_NULL_LAST
     }
 
     class OrderBy implements IQueryable{

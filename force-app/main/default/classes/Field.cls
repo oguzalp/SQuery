@@ -93,13 +93,13 @@ public class Field extends Condition {
     
     public Field isNull() {
 		this.operant = Operator.EQUALS;
-		this.field = null;
+        this.value = NULL;
 		return this;
 	}
 
 	public Field isNotNull() {
 		this.operant = Operator.NOT_EQUALS;
-		this.field = null;
+        this.value = NULL;
 		return this;
 	}
     
