@@ -110,7 +110,7 @@ public virtual class SQuery implements IQueryable{
 
     public SQuery addFields(List<String> fields){
         for(String fn: fields){
-            this.addField(fn);
+            this.addField(fn.trim());
         } 
         //this.fields = new Set<String>(fields);
         return this;
@@ -125,7 +125,7 @@ public virtual class SQuery implements IQueryable{
     }
 
     public SQuery addField(String fieldName){        
-        this.fields.add(getQualifiedFieldName(fieldName));
+        this.fields.add(getQualifiedFieldName(fieldName.trim()));
         return this;
     }
 
@@ -252,7 +252,7 @@ public virtual class SQuery implements IQueryable{
     public SQuery orderBy(String fieldName, SortDirection direction){
 
         orderBys.add(new OrderBy(
-                getQualifiedFieldName(fieldName), 
+                getQualifiedFieldName(fieldName.trim()), 
                 direction
         ));
         
