@@ -43,7 +43,8 @@ public virtual class SQuery implements IQueryable{
     private String forReference = '';
     private String forUpdate = '';
 
-    private List<SQuery> subQueries; 
+    private List<SQuery> subQueries;
+    private Set<String> subQueryAsFields; 
     private List<OrderBy> orderBys;
     public Schema.SObjectType objectType {get;set;}
     
@@ -54,8 +55,8 @@ public virtual class SQuery implements IQueryable{
         this.fields = new Set<String>();
         this.parentFields = new Set<String>();
         this.subQueries = new List<SQuery>();
+        this.subQueryAsFields = new Set<String>();
         this.conditions = new List<Condition>();
-        //this.childRelationShips = new Map<String,Schema.SObjectType>();
         this.orderBys = new List<OrderBy>();
         this.enforceFLS = false;
     }
@@ -109,29 +110,37 @@ public virtual class SQuery implements IQueryable{
     }
 
     public SQuery addFields(List<String> fields){
-        for(String fn: fields){
-            this.addField(fn.trim());
-        } 
+        if(fields!=null && !fields.isEmpty()){
+            for(String fn: fields){
+                 this.addField(fn.trim());
+            } 
+        }
         //this.fields = new Set<String>(fields);
         return this;
     }
     //, comma seperated fields
     public SQuery addFields(String fields){
+        if(String.isBlank(fields)) return this;
+
         if(fields.contains(',')){
             List<String> fieldList = fields.split(',');
             this.addFields(fieldList);
+        }else{
+           this.addField(fields.trim()); 
         }
         return this;
     }
 
-    public SQuery addField(String fieldName){        
-        this.fields.add(getQualifiedFieldName(fieldName.trim()));
+    public SQuery addField(String fieldName){
+        if(String.isNotBlank(fieldName)){
+            this.fields.add(getQualifiedFieldName(fieldName.trim()));
+        }        
         return this;
     }
 
     public SQuery selectAll(){
 
-        for( Schema.SObjectField sobjectField: this.sobjectFields.values()){
+        for(Schema.SObjectField sobjectField: this.sobjectFields.values()){
             Schema.DescribefieldResult fieldResult = sobjectField.getDescribe();
             if(fieldResult.isAccessible()){
                 this.fields.add(fieldResult.getName());
@@ -152,9 +161,11 @@ public virtual class SQuery implements IQueryable{
     }
 
     public SQuery addParentFields(List<String> parentFields){
-        for(String fn: parentFields){
-            this.addParentField(fn);
-        } 
+        if(parentFields!=null && !parentFields.isEmpty()){
+            for(String fn: parentFields){
+                this.addParentField(fn);
+            } 
+        }
         return this;  
     }
 
@@ -162,17 +173,22 @@ public virtual class SQuery implements IQueryable{
      *  Comma delimited field set
      */
     public SQuery addParentFields(String parentFields){
-        if(String.isNotBlank(parentFields) && parentFields.contains(',')){
+        if(String.isBlank(parentFields)) return this;
+        if(parentFields.contains(',')){
             List<String> fieldList = parentFields.split(',');
             this.addParentFields(fieldList);
+        }else{
+           this.addParentField( parentFields.trim() ); 
         }
         return this;
     }
 
     public SQuery addParentField(String parentFieldName){
-        String qualifiedName = getQualifiedParentName(parentFieldName);
-        System.debug('qualifiedParentName===>'+qualifiedName);
-        this.parentFields.add(parentFieldName);
+        if(String.isNotBlank(parentFieldName)){
+            String qualifiedName = getQualifiedName(this.objectType, parentFieldName);
+            System.debug('qualifiedParentName===>'+qualifiedName);
+            this.parentFields.add(parentFieldName);
+        } 
         return this;
     }
 
@@ -199,13 +215,14 @@ public virtual class SQuery implements IQueryable{
     }
 
     
-    public String getQualifiedParentName(String fieldName){
-        String temp = fieldName;  
-        SObjectType objtype;
+    public static String getQualifiedName(SObjectType objType,String fieldName){
+        String temp = fieldName;
+        if(objType == null) { throw new SQuery.SQueryException('sobject type can not be blank'); }  
+        //SObjectType objtype;
         List<String> allFields = new List<String>();
         if(fieldName.contains('.')){         
              while (temp.contains('.')) {
-                if(objtype == null){ objtype = this.objectType; } 
+                //if(objtype == null){ objtype = this.objectType; } 
                 //System.debug('ObjectType===>'+objtype);
                 String first = temp.subStringBefore('.');
                 //System.debug('first===>'+first);
@@ -226,12 +243,11 @@ public virtual class SQuery implements IQueryable{
             }
             return String.join(allFields,'.');       
          }else{
-             return getFieldDescribeByName(this.objectType,fieldName).getName();
-         }
-       
+             return getFieldDescribeByName(objType,fieldName).getName();
+         } 
     }
 
-    private DescribeFieldResult getFieldDescribeByName(SobjectType stype,String fieldApi){
+    private static DescribeFieldResult getFieldDescribeByName(SobjectType stype,String fieldApi){
        return stype.getDescribe().fields.getMap().get(fieldApi.toLowerCase()).getDescribe();
     }
 
@@ -300,7 +316,7 @@ public virtual class SQuery implements IQueryable{
             throw new SObjectException('User has not permission to access that '+ this.sobjectResult.getName() + ' object');
         }
         try{
-           return new List<SObject>( Database.query(this.toSoqL()) );
+           return new List<SObject>( Database.query(this.toSoql()) );
         } catch(Exception ex) {
             throw new SQueryException(ex.getMessage());
         }  
@@ -363,7 +379,7 @@ public virtual class SQuery implements IQueryable{
         }
     }
 
-    public String toSoqL(){
+    public String toSoql(){
 
         String formatString = 'SELECT {0} FROM {1}';
 
@@ -371,34 +387,30 @@ public virtual class SQuery implements IQueryable{
            this.fields = new Set<String>{'Id'};
         }
 
-        if(!this.parentFields.isEmpty()){
-           this.fields.addAll(this.parentFields);
-        }
-
         if(this.enforceFLS){
            setSharingRules();
         }
+
        //add sub Query
         if(!this.subQueries.isEmpty()){
-
            for(SQuery sq: this.subQueries){
                String temp = '(';
                temp += sq.toSoql();
                temp += ')'; 
-               this.fields.add(temp);
+               //this.fields.add(temp);
+               this.subQueryAsFields.add(temp);
            }
         }
+        List<String> mergeAllFields = new List<String>(this.fields);
+        mergeAllFields.addAll(this.parentFields);
+        mergeAllFields.addAll(this.subQueryAsFields);    
 
         List<String> args = new String[]{
-           String.join(new List<String>(this.fields),','),
+           String.join(mergeAllFields,','),
            this.objectName
         };
            
         soql = String.format(formatString,args);
-
-        /*if(this.whereState != null){
-            soql += ' WHERE ' + whereState.toSoql();     
-        }*/
 
         if(!this.conditions.isEmpty()){
             soql += ' WHERE ';
@@ -407,14 +419,13 @@ public virtual class SQuery implements IQueryable{
                 whereConditions.add(c.toSoql());
             }
             soql += String.join(whereConditions, ' AND ');
-            //System.debug('WHERE CONDITIONS====>'+soql);
         }
 
-        if(this.whereState != null && this.additionalWhereClause!=null){
+        if(!this.conditions.isEmpty() && this.additionalWhereClause!=null){
             soql += ' ' + this.additionalWhereClause;
         }
 
-        if(this.whereState == null && this.additionalWhereClause!=null){
+        if(this.conditions.isEmpty() && this.additionalWhereClause!=null){
            soql += ' WHERE ' + this.additionalWhereClause;
         }
         
@@ -470,9 +481,10 @@ public virtual class SQuery implements IQueryable{
                 }
             }
         }
+        //this.fields = accessibleFields;
     }
 
-    private String getQualifiedSObjectName(){
+    public String getQualifiedSObjectName(){
         return this.objectName;
     }
 
