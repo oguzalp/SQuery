@@ -27,12 +27,12 @@ public class SQueryTest
     {   
         String qry = 
         new SQuery(Account.sObjectType)
-            .addFields('Id,AccountSource,AccountNumber,RecordTypeId')
+            .addFields('Id,AccountSource,AccountNumber')
             .setLimit(50)
             .offset(10)
             .toSoql();
 
-        System.assertEquals('SELECT Id,AccountSource,AccountNumber,RecordTypeId FROM Account LIMIT 50 OFFSET 10', qry);
+        System.assertEquals('SELECT Id,AccountSource,AccountNumber FROM Account LIMIT 50 OFFSET 10', qry);
     }
     
     @isTest

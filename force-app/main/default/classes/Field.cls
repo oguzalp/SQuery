@@ -48,6 +48,12 @@ public class Field extends Condition {
         return this;  
     }
 
+    public Field isLike(Object value){
+        this.operant = Operator.ISLIKE;
+        this.value = value;
+        return this;
+    }
+
     public Field startWith(Object value){
         this.operant = Operator.STARTS_WITH;
         this.value = value;
@@ -119,6 +125,10 @@ public class Field extends Condition {
         }else if( operant == Operator.GREATER_THAN_OR_EQUAL ){
             whereSql = field + ' >= ' + objectValueToSoqlLiteral(value);
         }
+        else if( operant == Operator.ISLIKE ){
+            String param = String.valueOf(value);
+            whereSql = field + ' LIKE ' + '\'' + param + '\'';
+        }
         else if( operant == Operator.ENDS_WITH ){
             whereSql = field + ' LIKE ' +  '\'%' + String.escapeSingleQuotes(String.valueOf(value)) + '\'';
         }
@@ -163,27 +173,24 @@ public class Field extends Condition {
 
         }else if(val instanceof Date){
 
-            returnValue += String.valueOf(val).trim();
+            returnValue += String.valueOf((Date)val).trim();
 
         }else if(val instanceof Datetime){
-
             DateTime dtime = (Datetime)val;
             Datetime dGmt = Datetime.newInstanceGmt(dtime.year(),dtime.month(),dtime.day(),dtime.hour(),dtime.minute(),dtime.second());
             returnValue += JSON.serialize(dGmt).remove('"');
-
-        }else if(val instanceof List<Object> || 
-            val instanceof Set<Object>){
-            List<String> vals = new List<String>();
-            for (Object v : (List<Object>)val) {
-               if(v instanceof String || v instanceof Id){
-                    vals.add( '\'' + String.escapeSingleQuotes( String.valueOf(v) ) + '\'');
-               }else{
-                   vals.add((String)v);
-               }
-            }
-            returnValue += String.join(vals, ', ');
-
-        }else if(val instanceof DateLiteral){
+        }
+        else if(val instanceof List<String> || val instanceof List<Id>){
+            List<String> vals = (List<String>)val;
+            returnValue += prepareObjectValuesAsString(vals);           
+        }else if(val instanceof Set<String>){      
+            List<String> vals = new List<String>((Set<String>)val);
+            returnValue += prepareObjectValuesAsString(vals);
+        }else if(val instanceof Set<Id>){
+            List<String> vals = (List<String>)new List<Id>((Set<Id>)val);
+            returnValue += prepareObjectValuesAsString(vals);
+        }
+        else if(val instanceof DateLiteral){
 
             returnValue += ((DateLiteral)val).name();
 
@@ -198,6 +205,15 @@ public class Field extends Condition {
         return returnValue;
     }
 
+    private static String prepareObjectValuesAsString(List<String> values){
+        if(values == null || values.isEmpty()) return '';
+        List<String> vals = new List<String>();
+        for(String v : values){
+            vals.add( '\'' + String.escapeSingleQuotes(v) + '\'');
+        }
+        return String.join(vals, ',');
+    }
+
     public enum Operator {
         EQUALS,
         NOT_EQUALS,
@@ -205,12 +221,13 @@ public class Field extends Condition {
         LESS_THAN_OR_EQUAL,
         GREATER_THAN,
         GREATER_THAN_OR_EQUAL,
+        ISLIKE,
         STARTS_WITH,
         ENDS_WITH,
         CONTAINS,
         INCLUDES,
         EXCLUDES,
         IS_IN,    
-        NOT_IN    
+        NOT_IN   
     }
 }

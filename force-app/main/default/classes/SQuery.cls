@@ -22,17 +22,15 @@ SOFTWARE.
 */
 
 public virtual class SQuery implements IQueryable{
-    private Boolean enforceFLS;
     
+    private Boolean enforceFLS;
     private Schema.DescribeSObjectResult sobjectResult;
     private Map<String,Schema.SObjectField> sobjectFields; 
     private Map<String,Schema.DescribeFieldResult> sObjectlocalFields;
-    //private Map<String,Schema.SObjectType> childRelationShips;
     private Set<String> fields;
     private Set<String> parentFields;
     private Integer queryLimit;
     private Integer offSetValue;
-    //private String orderState;
     private Condition whereState;
     private List<Condition> conditions; 
     private String additionalWhereClause;
@@ -47,11 +45,14 @@ public virtual class SQuery implements IQueryable{
     private Set<String> subQueryAsFields; 
     private List<OrderBy> orderBys;
     public Schema.SObjectType objectType {get;set;}
+
+    private List<String> qualifiedParentFields;
     
     /*
         Initialize variables;
     */
     public SQuery(){
+        this.qualifiedParentFields = new List<String>();
         this.fields = new Set<String>();
         this.parentFields = new Set<String>();
         this.subQueries = new List<SQuery>();
@@ -63,18 +64,18 @@ public virtual class SQuery implements IQueryable{
 
     public SQuery(String objectName){
         this();
-         // Get Schema.SObjectType
+
         Map<String, Schema.SObjectType> globalDescribe =
             Schema.getGlobalDescribe();
 
         this.objectName = addNameSpace(objectName);
-        System.debug('objectName==>'+this.objectName);
+
         this.objectType = globalDescribe.get(this.objectName);
-		System.debug('objectType===>'+objectType);
+
         if (null == this.objectType) {
 
             throw new SQueryException('Cannot find corresponding ' +
-                    'SObject type from the SObject name ' + this.objectName);
+                    'SObject type from the SObject ' + this.objectName);
         } 
 
         this.sobjectResult = objectType.getDescribe();
@@ -102,6 +103,10 @@ public virtual class SQuery implements IQueryable{
         this.sobjectFields = sobjectResult.fields.getMap();
         this.objectName = childRelName;
         setLocalNamesOfFieldsToMap();       
+    }
+    
+    public Map<String,Schema.DescribeFieldResult> getLocalFields(){
+        return this.sObjectlocalFields;
     }
     
     public SQuery enforceFLS(){
@@ -138,11 +143,32 @@ public virtual class SQuery implements IQueryable{
         return this;
     }
 
+    public SQuery setFieldSet(String fieldSetName){
+
+        if(this.sobjectResult == null) throw new SQueryException('object describe result can not be blank');
+        Map<String,Schema.FieldSet> fieldSets = this.sobjectResult.fieldsets.getMap();
+        if(!fieldSets.containsKey(fieldSetName)){
+            throw new SQueryException('the given field set can not be found.');
+        }
+        Schema.FieldSet fset = fieldSets.get(fieldSetName);
+        for(Schema.FieldSetMember fm : fset.getFields()){
+           String fieldName = fm.getFieldPath();
+           if(fieldName.contains('\\.')){
+               this.addParentField(fieldName);
+           }else{
+               this.fields.add(fieldName);
+           } 
+        }
+        return this;
+    }
+
     public SQuery selectAll(){
 
         for(Schema.SObjectField sobjectField: this.sobjectFields.values()){
             Schema.DescribefieldResult fieldResult = sobjectField.getDescribe();
-            if(fieldResult.isAccessible()){
+            if(this.enforceFLS && fieldResult.isAccessible()){
+                this.fields.add(fieldResult.getName());
+            }else{
                 this.fields.add(fieldResult.getName());
             }  
         }
@@ -170,7 +196,7 @@ public virtual class SQuery implements IQueryable{
     }
 
     /**
-     *  Comma delimited field set
+     *  Comma delimited field list
      */
     public SQuery addParentFields(String parentFields){
         if(String.isBlank(parentFields)) return this;
@@ -185,16 +211,16 @@ public virtual class SQuery implements IQueryable{
 
     public SQuery addParentField(String parentFieldName){
         if(String.isNotBlank(parentFieldName)){
-            String qualifiedName = getQualifiedName(this.objectType, parentFieldName);
-            System.debug('qualifiedParentName===>'+qualifiedName);
-            this.parentFields.add(parentFieldName);
+            String qualifiedName = getQualifiedParentFieldNames(this.objectType, parentFieldName.trim());
+            this.parentFields.add(qualifiedName);
+            //!important, Empty the parentfield list for the other parent fields!!
+            this.qualifiedParentFields = new List<String>();
         } 
         return this;
     }
 
     
     public Squery addCondition(Condition c){
-        //this.whereState = c;
         this.conditions.add(c);
         return this;
     }
@@ -214,38 +240,65 @@ public virtual class SQuery implements IQueryable{
         return this;
     }
 
-    
-    public static String getQualifiedName(SObjectType objType,String fieldName){
-        String temp = fieldName;
-        if(objType == null) { throw new SQuery.SQueryException('sobject type can not be blank'); }  
-        //SObjectType objtype;
-        List<String> allFields = new List<String>();
-        if(fieldName.contains('.')){         
-             while (temp.contains('.')) {
-                //if(objtype == null){ objtype = this.objectType; } 
-                //System.debug('ObjectType===>'+objtype);
-                String first = temp.subStringBefore('.');
-                //System.debug('first===>'+first);
-                String objField = translateParentField(first);
-                //System.debug('objField===>'+objField);
-                DescribeFieldResult dfr = getFieldDescribeByName(objtype,objField); 
+    //object type, comma seperated fieldNames
+    private String getQualifiedParentFieldNames(SObjectType objType,String fieldNames){        
+        if(objType == null) { 
+            throw new SQuery.SQueryException('Sobject type was not specified!');
+        }
+        try{
+            DescribeFieldResult dfr;
+            if(fieldNames.contains('.')){
+                String first =  fieldNames.subStringBefore('.');
+                String remained = fieldNames.subStringAfter('.');
+                //Assuming that the field has no namespace prefix.Otherwise it will throw an error.
+                String localFieldName = translateParentField(first);
 
-                allFields.add(reverseParentField(dfr.getName()));
+                dfr = getFieldResultByLocalNameOfSObject(objType,localFieldName);
 
-                if(! dfr.getReferenceTo().isEmpty()){
+                if(!dfr.getReferenceTo().isEmpty()){
                     objtype = dfr.getReferenceTo()[0];
+
                 }
-                temp = temp.subStringAfter('.');
-                if(!temp.contains('.')){
-                   allFields.add(getFieldDescribeByName(objtype,temp).getName());
-                }
-                //System.debug('last temp===>'+temp);
+
+                qualifiedParentFields.add( reverseParentField(dfr.getName()) );
+
+                getQualifiedParentFieldNames(objtype,remained);
+
+            }else{
+                dfr = getFieldResultByLocalNameOfSObject(objType,fieldNames);
+                qualifiedParentFields.add( dfr.getName() );
             }
-            return String.join(allFields,'.');       
-         }else{
-             return getFieldDescribeByName(objType,fieldName).getName();
-         } 
+            return String.join(qualifiedParentFields,'.');
+        
+        }catch(Exception ex){
+            throw new SQueryException('Error occured on getQualifiedParentFieldNames method : ' + ex.getMessage());
+        }
     }
+
+    private static DescribeFieldResult getFieldResultByLocalNameOfSObject(SObjectType objType,String fieldName){
+        try{
+            Map<String,Schema.SObjectField> fields = objType.getDescribe().fields.getMap();
+            DescribeFieldResult qualifiedField;
+            for(String field: fields.keySet()){
+               DescribeFieldResult dfr =  fields.get(field).getDescribe();
+               if( dfr.getLocalName().equalsIgnoreCase(fieldName) ){
+                    qualifiedField = dfr;
+                    break;
+               }
+            }
+            return qualifiedField;
+        }catch(Exception ex){
+            throw new SQueryException(ex.getMessage());
+        }
+    }
+
+    //This is a static helper method that returns the qualified parent field name
+    public static String getQualifiedName(SObjectType objType,String fieldName){
+        Squery sq = new SQuery(objType);
+        return sq.getQualifiedParentFieldNames(objType, fieldName);
+    }
+
+    
 
     private static DescribeFieldResult getFieldDescribeByName(SobjectType stype,String fieldApi){
        return stype.getDescribe().fields.getMap().get(fieldApi.toLowerCase()).getDescribe();
@@ -358,9 +411,9 @@ public virtual class SQuery implements IQueryable{
         
         } else if (obj.endsWithIgnoreCase('__s') && obj.countMatches('__') == 2) {
             //If it is a location field            
-            obj = namespace + obj;
+            obj = namespace + '__' + obj;
+            
         }
-
         return obj;
     }
     
@@ -382,7 +435,9 @@ public virtual class SQuery implements IQueryable{
     public String toSoql(){
 
         String formatString = 'SELECT {0} FROM {1}';
-
+        if(this.objectType ==null ){
+            throw new SQueryException('Seems that any sObject type was not specified.Sobject type is required.');
+        }
         if(this.fields.isEmpty()){
            this.fields = new Set<String>{'Id'};
         }
@@ -465,27 +520,34 @@ public virtual class SQuery implements IQueryable{
     
     }
 
-    private void setSharingRules(){
+    public SQuery setSharingRules(){
         if(! objectType.getDescribe().isAccessible()){
             throw new SQueryException('Permission Denied: cannot read ' + objectType.getDescribe().getName() + ' object');
         }
-        Set<String> accessibleFields = new Set<String>();
+        Set<String> notAcccessibleFields = new Set<String>();
         for(String fn : this.fields){
             String fnLower = fn.toLowerCase();
             if(sobjectFields.containsKey(fnLower)){
                 Schema.DescribeFieldResult fresult = sobjectFields.get(fnLower).getDescribe();
-                if(fresult.isAccessible()){
-                    accessibleFields.add(fresult.getName());
-                }else{
-                    throw new SQueryException('Permission Denied: cannot read ' + fresult.getName() + ' field');
+                if(!fresult.isAccessible()){
+                    notAcccessibleFields.add(fresult.getName());
                 }
             }
         }
-        //this.fields = accessibleFields;
+        if(!notAcccessibleFields.isEmpty()){
+            throw new SQueryException('Permission Denied: cannot read ' + notAcccessibleFields + ' field(s)');
+        }
+        return this;
     }
 
     public String getQualifiedSObjectName(){
         return this.objectName;
+    }
+
+    public List<String> getQualifiedFieldNames(){
+        List<String> allFields = new List<String>(this.fields);
+        allFields.addAll(this.parentFields);
+        return allFields;
     }
 
     private String getReferenceFieldName(String fieldRel){

@@ -1,5 +1,5 @@
 {
-    "orgName": "Demo Company",
+    "orgName": "SOQL Builder",
     "edition": "Developer",
     "orgPreferences" : {
         "enabled": ["S1DesktopEnabled"]
