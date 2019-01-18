@@ -235,7 +235,7 @@ public virtual class SQuery implements IQueryable{
         return this;        
     }
 
-    public SQuery getRecordsByIds(List<String> idSet){
+    public SQuery getRecordById(List<Id> idSet){
         this.addCondition( new Field('Id').isIN(idSet) );
         return this;
     }
