@@ -159,3 +159,142 @@ String query = new SQuery('Account')
 // the query is equivalent to
 // SELECT Id,Name,CreatedDate FROM Account WHERE Id IN ('0015C00000M7IEwQAN','0010Y00000DWdKIQA1')
 ```
+
+#### Adding conditions to your query
+
+addCondition method provides you a way of adding a condition(s) to your queries. 
+This method only accepts a class instance that is extended by the Condition class
+which can be either Field, AndCondition or OrCondition classes.
+
+```java
+
+String query = new SQuery(Contact.SObjectType)
+    .addFields('Id,FirstName,LastName')
+    .addCondition(new Field('FirstName').equals('John'))
+    .addCondition(new Field('LastName').equals('Doe'))
+    .toSoql();
+// the query is equivalent to
+// SELECT Id,FirstName,LastName From Contact WHERE FirstName='John' AND LastName='Doe'
+```
+
+#### Grouping Conditions
+
+If you want to group your conditions you can leverage the AndCondition or OrCondition class, which are extended by the Condition class, so that it can be passed to addCondition method as condition argument.
+
+```java
+List<Account> accounts = new SQuery('Account')
+  .addFields(new List<String>{'Name','AccountSource','AnnualRevenue','NumberOfEmployees'})
+  .addCondition(
+    new andCondition()
+      .add(new Field('AccountSource').equals('Web'))
+      .add( 
+        new orCondition()
+          .add(new Field('Rating').equals('Hot'))
+          .add(new Field('AnnualRevenue').greaterThan(1500000))
+      )
+  ).runQuery();
+  
+//it is equivalent to
+/* 
+  SELECT Name,AccountSource,AnnualRevenue,NumberOfEmployees FROM Account
+  WHERE ( AccountSource = 'Web' AND (Rating = 'Hot' OR AnnualRevenue > 1500000))
+*/
+```
+
+#### Adding Sub-Queries 
+
+```java
+String query =
+  new SQuery('Account')
+      .enforceFLS()
+      .addFields('Id,Name,AccountSource')
+      .addSubQuery(
+          //Param1 : sObjectType of query object
+          //Param2 : Child Relationship API Name
+          new SQuery(Opportunity.SObjectType,'Opportunities')
+              .addFields('Id,Amount,StageName')
+              .addCondition(new Field('Amount').greaterThan(50000))
+      ).toSoql();
+  
+  System.assertEquals(query,
+    'SELECT ID,Name,AccountSource,(SELECT Id,Amount,StageName FROM Opportunities WHERE Amount>50000 ) FROM Account');
+```
+
+### FIELD CONDITIONS
+
+Field class helps you to filter query records based on the condition.
+Since the Field class is extended by the Condition class, it can be used as an argument in addCondition methods which only accepts Condition class
+You can instantiate a field class by giving the Field API name as String or SobjectField type.
+
+```java
+String query = new SQuery(Contact.SObjectType)
+    .addFields('Id,FirstName,LastName')
+    .addCondition(new Field('FirstName').contains('John'))
+    .toSoql();
+
+// the query is equivalent to
+// SELECT Id,FirstName,LastName From Contact WHERE FirstName LIKE '%John%'
+```
+
+#### Field class methods
+
+* equals(Object value)
+* notEquals(Object value)
+* lessThan(Object value)
+* lessThanOrEqual(Object value)
+* greaterThan(Object value)
+* greaterThanOrEqual(Object value)
+* isLike(Object value)
+* startWith(Object value)
+* endWith(object value)
+* contains(object value)
+* includes(object value)
+* excludes(object value)
+* isIN(Object value)
+* notIN(object value)
+* isNull(object value)
+* isNotNull(object value)
+
+and toSoql() method that returns the completed condition as filter string.
+
+#### Examples
+
+```java
+// Name = 'John'
+new Field('Name').equals('John');
+// Name != 'John'
+new Field('Name').notEquals('John');
+// Amount < 5000
+new Field(Opportunity.Amount).lessThan(5000); 
+//For the date fields you can either pass a Date type or DateLiteral enum type
+// CreatedDate < YESTERDAY
+new Field('CreatedDate').lessThan(DateLiteral.YESTERDAY); 
+// CreatedDate < 2019-1-18
+new Field('CreatedDate').lessThan(System.today());
+// AnnualRevenue <= 1500000
+new Field(Account.AnnualRevenue).lessThanOrEqual(1500000);
+// AnnualRevenue > 1500000
+new Field(Account.AnnualRevenue).greaterThan(1500000);
+// AnnualRevenue >= 1500000
+new Field(Account.AnnualRevenue).greaterThanOrEqual(1500000);
+// FirstName LIKE '%John%'
+new Field(Contact.FirstName).isLike('%John%');
+// FirstName LIKE 'John%'
+new Field(Contact.FirstName).startWith('Jan');
+// FirstName LIKE '%John'
+new Field(Contact.FirstName).endWith('Doe');
+// FirstName LIKE '%John%'
+new Field(Contact.FirstName).contains('Doe');
+// Custom_MultiSelectPicklist_Field__c INCLUDES ('itemA;itemB')
+new Field(Custom_Object_Name__c.Custom_MultiSelectPicklist_Field__c).includes('itemA;itemB');
+// Custom_MultiSelectPicklist_Field__c EXCLUDES ('itemA;itemB')
+new Field(Custom_Object_Name__c.Custom_MultiSelectPicklist_Field__c).excludes('itemA;itemB');
+// ID IN ('0015C00000M7IMRQA3','0015C00000M7IEwQAN')
+new Field(Account.Id).isIN(new List<Id>{ '0015C00000M7IMRQA3','0015C00000M7IEwQAN'});
+// ID NOT IN ('0015C00000M7IMRQA3','0015C00000M7IEwQAN')
+new Field(Account.Id).notIN(new List<Id>{ '0015C00000M7IMRQA3','0015C00000M7IEwQAN'}); 
+// FirstName = NULL
+new Field(Contact.FirstName).isNull();
+// FirstName != NULL
+new Field(Contact.FirstName).isNotNull();
+```
