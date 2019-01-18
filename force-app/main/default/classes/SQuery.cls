@@ -298,12 +298,6 @@ public virtual class SQuery implements IQueryable{
         return sq.getQualifiedParentFieldNames(objType, fieldName);
     }
 
-    
-
-    private static DescribeFieldResult getFieldDescribeByName(SobjectType stype,String fieldApi){
-       return stype.getDescribe().fields.getMap().get(fieldApi.toLowerCase()).getDescribe();
-    }
-
     private static String translateParentField(String parentName) {
         // translate the reference name
         if (parentName.endsWithIgnoreCase('__r')) {

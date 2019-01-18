@@ -48,8 +48,7 @@ public class SQueryTest
             String test_query = new SQuery(Contact.SObjectType)
             .enforceFLS()
             .addFields('Id,FirstName,LastName')
-            .addParentField('Account.Name')
-            .addParentField('Account.AccountSource')
+            .addParentFields('Account.Name,Account.AccountSource')
             .toSoql();
 
             System.assertEquals('SELECT Id,FirstName,LastName,Account.Name,Account.AccountSource FROM Contact',test_query);
@@ -114,5 +113,122 @@ public class SQueryTest
         System.assertEquals('SELECT Id,Name,AccountNumber FROM Account WHERE Id IN (\'' + ac.Id + '\')' ,query);
                 
     }
-    
+
+    @isTest
+    static void test_group_condition()
+    {
+        List<String> fieldList = new List<String>{'Id','Name','AccountSource'};
+        String query = new SQuery('Account')
+					.addFields(fieldList)
+					.addCondition(
+            new andCondition()
+              .add(new Field('AccountSource').equals('Web'))
+              .add( 
+                new orCondition()
+                  .add(new Field('Rating').notEquals('Hot'))
+                  .add(new Field('AnnualRevenue').greaterThan(1500000))
+                )
+            ).toSoql();
+        
+        String expectedQuery = 'SELECT Id,Name,AccountSource FROM Account WHERE (AccountSource = \'Web\' AND (Rating != \'Hot\' OR AnnualRevenue > 1500000))';
+        System.assertEquals(expectedQuery ,query);                
+    }
+
+    @isTest
+    static void test_sub_query()
+    {
+      String query =
+        new SQuery('Account')
+            .addFields('Id,Name,AccountSource')
+            .addSubQuery(
+            	new SQuery(Opportunity.SObjectType,'Opportunities')
+                .addFields('Id,Amount,StageName')
+                .addCondition(new Field('Amount').greaterThan(50000))
+      	).toSoql();
+  
+  			System.assertEquals(query,
+    			'SELECT Id,Name,AccountSource,(SELECT Id,Amount,StageName FROM Opportunities WHERE Amount > 50000) FROM Account'
+				);                  
+  	}
+
+		@isTest
+    static void test_order_by()
+    {
+			String query = new SQuery('Account')
+				.addFields('Id,Name,CreatedDate')
+				.orderBy('CreatedDate',SortDirection.ASCENT)
+				.orderBy('Name',SortDirection.DESCENT)
+				.toSoql();
+			
+			System.assertEquals('SELECT Id,Name,CreatedDate FROM Account ORDER BY CreatedDate ASC,Name DESC',query);
+		}
+
+		@isTest
+    static void test_for_view()
+    {
+			String query = new SQuery(Case.getSObjectType())
+				.addFields('Id,CaseNumber')
+				.addParentField('Account.Name')
+				.forView()
+				.toSoql();
+			
+			System.assertEquals('SELECT Id,CaseNumber,Account.Name FROM Case FOR VIEW',query);
+		}
+
+		@isTest
+    static void test_for_update()
+    {
+			String query = new SQuery(Account.getSObjectType())
+				.addFields('Id,Name')
+				.forUpdate()
+				.toSoql();
+			
+			System.assertEquals('SELECT Id,Name FROM Account FOR UPDATE',query);
+		}
+
+		@isTest
+    static void test_for_reference()
+    {
+			String query = new SQuery(Contact.getSObjectType())
+				.addFields('Id,FirstName,LastName')
+				.forReference()
+				.toSoql();
+			
+			System.assertEquals('SELECT Id,FirstName,LastName FROM Contact FOR REFERENCE',query);
+		}
+
+		@isTest
+    static void test_select_fields_in_fieldset()
+    {
+			try{
+				List<Contact> contacts =
+					new SQuery(Contact.sObjectType)
+						.setFieldSet('test_field_set_name')
+						.runQuery();
+
+			}catch(Squery.SQueryException ex){
+				System.assertEquals('the given field set can not be found.',ex.getMessage());
+			}
+		}
+
+		@isTest
+    static void test_all_field_conditions()
+    {
+			System.assertEquals('Name = \'John\'',new Field('Name').equals('John').toSoql());
+			
+			System.assertEquals('Name != \'John\'',new Field('Name').notEquals('John').toSoql());
+			 
+			System.assertEquals('Amount < 5000',new Field('Amount').lessThan(5000).toSoql()); 
+			
+			System.assertEquals('CreatedDate < YESTERDAY',
+				new Field('CreatedDate').lessThan(DateLiteral.YESTERDAY).toSoql()); 		
+			
+			String today_date = String.valueOf(Date.today());
+			System.assertEquals('CreatedDate < ' + today_date,
+				new Field('CreatedDate').lessThan(Date.today()).toSoql()); 		
+			 
+			System.assertEquals('AnnualRevenue <= 1500000',
+				new Field(Account.AnnualRevenue).lessThanOrEqual(1500000).toSoql());
+			
+		}	
 }
