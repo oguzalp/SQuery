@@ -544,14 +544,6 @@ public virtual class SQuery implements IQueryable{
         return allFields;
     }
 
-    private String getReferenceFieldName(String fieldRel){
-        if(fieldRel.endsWithIgnoreCase('__r')){
-           return fieldRel.removeEnd('__r') + '__c';    
-        }else{
-            return fieldRel;
-        }
-    }
-
     class OrderBy implements IQueryable{
 
         public String fieldName {get;set;}

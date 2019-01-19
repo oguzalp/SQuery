@@ -83,7 +83,28 @@ public class SQueryTest
 
         System.assertEquals(1, acs.size());
         System.assertEquals('SELECT Id,Name,AccountNumber FROM Account WHERE AccountNumber = \'AC-1234\'',query.toSoql());
-                
+				//Testing get getQualifiedSObjectName
+				System.assertEquals('Account',query.getQualifiedSObjectName());
+				//Testing get getQualifiedFieldNames
+				List<String> qualified_fields = query.getQualifiedFieldNames();
+        System.assertEquals(qualified_fields.get(0),'Id');
+				System.assertEquals(qualified_fields.get(1),'Name');
+				System.assertEquals(qualified_fields.get(2),'AccountNumber');      
+    }
+
+		@isTest
+    static void test_additional_condition()
+    {
+        String query = new SQuery(Account.SObjectType)
+                .addFields('Id,Name,AccountNumber')
+                .addCondition(new Field('AccountNumber').equals('AC-1234'))
+								//condition can be a totally where clause string
+								.addCondition('AND AccountSource = \'Web\'')
+								.toSoql();
+
+				System.assertEquals(query,
+					'SELECT Id,Name,AccountNumber FROM Account WHERE AccountNumber = \'AC-1234\' AND AccountSource = \'Web\'');
+           
     }
 
     @isTest
@@ -214,6 +235,9 @@ public class SQueryTest
 		@isTest
     static void test_all_field_conditions()
     {
+
+			Account ac = [Select Id From Account Limit 1];
+
 			System.assertEquals('Name = \'John\'',new Field('Name').equals('John').toSoql());
 			
 			System.assertEquals('Name != \'John\'',new Field('Name').notEquals('John').toSoql());
@@ -229,6 +253,47 @@ public class SQueryTest
 			 
 			System.assertEquals('AnnualRevenue <= 1500000',
 				new Field(Account.AnnualRevenue).lessThanOrEqual(1500000).toSoql());
+
+			System.assertEquals('AnnualRevenue > 1500000',
+				new Field(Account.AnnualRevenue).greaterThan(1500000).toSoql());
 			
+			System.assertEquals('AnnualRevenue >= 1500000',
+				new Field(Account.AnnualRevenue).greaterThanOrEqual(1500000).toSoql());
+			
+			System.assertEquals('FirstName LIKE \'%John%\'',
+				new Field(Contact.FirstName).isLike('%John%').toSoql());
+			
+			System.assertEquals('FirstName LIKE \'John%\'',
+				new Field(Contact.FirstName).startWith('John').toSoql());
+			
+			System.assertEquals('FirstName LIKE \'%John\'',
+				new Field(Contact.FirstName).endWith('John').toSoql());
+			
+			System.assertEquals('FirstName LIKE \'%John%\'',
+				new Field(Contact.FirstName).contains('John').toSoql());
+			
+			System.assertEquals('Custom_MultiSelectPicklist_Field__c INCLUDES (\'itemA;itemB\')',
+				new Field('Custom_MultiSelectPicklist_Field__c').includes('itemA;itemB').toSoql());
+			
+			System.assertEquals('Custom_MultiSelectPicklist_Field__c EXCLUDES (\'itemA;itemB\')',
+				new Field('Custom_MultiSelectPicklist_Field__c').excludes('itemA;itemB').toSoql());
+	
+			SQuery query = new Squery('Account')
+				.addFields('Id,Name')
+				.addCondition(new Field('ID').isIN(new List<Id>{ac.Id}));
+
+			String expectedQuery = 'SELECT Id,Name FROM Account WHERE ID IN (\'' +ac.Id + '\')';
+			System.assertEquals(query.toSoql(),expectedQuery);
+			System.assertEquals(query.runQuery().get(0).Id, ac.Id);
+			
+			System.assertEquals('Id NOT IN (\'0015C00000M7IMRQA3\')',
+				new Field(Account.Id).notIN(new List<Id>{ '0015C00000M7IMRQA3'}).toSoql() );
+
+			System.assertEquals('FirstName = NULL',
+				new Field(Contact.FirstName).isNull().toSoql());
+			
+			System.assertEquals('FirstName != NULL',
+				new Field(Contact.FirstName).isNotNull().toSoql());
+		
 		}	
 }
